@@ -46,6 +46,22 @@ fn validate_directory(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+fn is_build_executable(file_name: &str) -> bool {
+    // Common build tool executables and wrappers
+    static BUILD_EXECUTABLES: [&str; 8] = [
+        "mvnw",
+        "mvnw.cmd",
+        "gradlew",
+        "gradlew.bat",
+        "npm",
+        "yarn",
+        "pnpm",
+        "cargo",
+    ];
+    
+    BUILD_EXECUTABLES.contains(&file_name)
+}
+
 fn list_files(dir: &Path) -> io::Result<()> {
     let walker = WalkBuilder::new(dir)
         .hidden(false)     // Show hidden files
@@ -54,11 +70,23 @@ fn list_files(dir: &Path) -> io::Result<()> {
         .git_global(true)  // Use global gitignore
         .require_git(false) // Don't require git repo
         .filter_entry(|e| {
-            // Skip .git, .svn, and .hg directories
-            !e.file_name()
-                .to_str()
-                .map(|s| s == ".git" || s == ".svn" || s == ".hg")
-                .unwrap_or(false)
+            let file_name = e.file_name();
+            let file_name_str = match file_name.to_str() {
+                Some(s) => s,
+                None => return true, // Keep entries with invalid UTF-8 names
+            };
+
+            // Skip SCM directories
+            if file_name_str == ".git" || file_name_str == ".svn" || file_name_str == ".hg" {
+                return false;
+            }
+
+            // Skip build executables
+            if is_build_executable(file_name_str) {
+                return false;
+            }
+
+            true
         })
         .build();
 
