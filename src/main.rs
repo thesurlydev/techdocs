@@ -257,7 +257,7 @@ fn list_files(dir: &Path, exclude_patterns: &[String]) -> io::Result<()> {
         .map_err(|e| io::Error::new(io::ErrorKind::Other, 
             format!("Failed to build override matcher: {}", e)))?;
     let walker = WalkBuilder::new(dir)
-        .hidden(false)     // Show hidden files
+        .hidden(true)     // Hide hidden files
         .git_ignore(true)  // Respect .gitignore files
         .ignore(true)      // Use standard ignore patterns
         .git_global(true)  // Use global gitignore
