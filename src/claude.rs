@@ -1,4 +1,4 @@
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE, AUTHORIZATION};
+use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::env;
 
@@ -51,10 +51,7 @@ impl ClaudeClient {
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert(
-            AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {}", self.api_key))?,
-        );
+        headers.insert("x-api-key", HeaderValue::from_str(&self.api_key)?);
         headers.insert(
             "anthropic-version",
             HeaderValue::from_static("2023-06-01"),
@@ -68,7 +65,7 @@ impl ClaudeClient {
         ];
 
         let request = ClaudeRequest {
-            model: "claude-3-opus-20240229".to_string(),
+            model: "claude-3-5-sonnet-20241022".to_string(),
             messages,
             max_tokens: 4096,
         };

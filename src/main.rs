@@ -96,7 +96,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 3. Installation instructions if relevant
 4. Basic usage examples
 5. Project structure overview
-Be concise and focus on the most important aspects. Use proper markdown formatting.";
+
+Be concise and focus on the most important aspects. Use proper markdown formatting.
+
+IMPORTANT: Output ONLY the markdown content. Do not include any other text, explanations, or metadata.";
 
             let readme_content = client.send_message(system_prompt, &files_content)
                 .await?;
@@ -104,7 +107,7 @@ Be concise and focus on the most important aspects. Use proper markdown formatti
             // Write to file
             std::fs::write(output, readme_content)?;
 
-            println!("Generated README.md at: {}", output);
+
             Ok(())
         }
     }?;
