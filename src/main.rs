@@ -29,6 +29,11 @@ fn validate_directory(path: &Path) -> io::Result<()> {
     if !path.is_dir() {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "path is not a directory"));
     }
+    // Check if directory is readable by attempting to read its contents
+    match path.read_dir() {
+        Ok(_) => (),
+        Err(e) => return Err(io::Error::new(io::ErrorKind::PermissionDenied, format!("directory is not readable: {}", e))),
+    }
     Ok(())
 }
 
