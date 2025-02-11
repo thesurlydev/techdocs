@@ -1,36 +1,166 @@
 use std::path::Path;
 use std::io;
 use ignore::{WalkBuilder, overrides::OverrideBuilder};
-use clap::Parser;
+use clap::{Parser, Subcommand};
+use std::fmt::Write as FmtWrite;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Directory path to list files from
-    path: String,
-
     /// Additional patterns to exclude (in .gitignore format)
-    #[arg(short, long, value_delimiter = ',')]
-    exclude: Vec<String>,
+    #[arg(short, long, value_delimiter = ',', global = true)]
+    exclude: Option<Vec<String>>,
+
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// List files in a format suitable for prompts, including file contents
+    Prompt {
+        /// Directory path to process
+        path: String,
+
+        /// Maximum size in KB for files to include (default: 100)
+        #[arg(short, long, default_value = "100")]
+        max_size: u64,
+
+        /// Maximum total output size in MB (default: 10)
+        #[arg(short, long, default_value = "10")]
+        total_size: u64,
+    },
+    /// List files in the directory
+    List {
+        /// Directory path to list
+        path: String,
+    },
 }
 
 fn main() {
     let args = Args::parse();
-    let path = Path::new(&args.path);
+    let exclude_patterns = args.exclude.unwrap_or_default();
     
-    match validate_directory(path) {
-        Ok(_) => match list_files(path, &args.exclude) {
-            Ok(_) => (),
-            Err(e) => {
-                eprintln!("Error listing files: {}", e);
-                std::process::exit(1);
+    let result = match &args.command {
+        Commands::Prompt { path, max_size, total_size } => {
+            let path = Path::new(path);
+            validate_directory(path)
+                .and_then(|_| list_files_prompt(path, &exclude_patterns, *max_size, *total_size))
+        }
+        Commands::List { path } => {
+            let path = Path::new(path);
+            validate_directory(path)
+                .and_then(|_| list_files(path, &exclude_patterns))
+        }
+    };
+    
+    if let Err(e) = result {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+/// Format file contents for LLM consumption, including language detection
+fn format_file_content(path: &Path, content: &str) -> String {
+    let mut output = String::new();
+    
+    // Detect language from extension
+    let lang = path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("txt");
+    
+    writeln!(&mut output, "File: {}", path.display()).unwrap();
+    writeln!(&mut output, "```{}", lang).unwrap();
+    output.push_str(content);
+    writeln!(&mut output, "```\n").unwrap();
+    
+    output
+}
+
+/// List files in a format suitable for prompts
+fn list_files_prompt(dir: &Path, exclude_patterns: &[String], max_file_size_kb: u64, max_total_size_mb: u64) -> io::Result<()> {
+    let max_file_size = max_file_size_kb * 1024;
+    let max_total_size = max_total_size_mb * 1024 * 1024;
+    let mut total_size = 0;
+    let mut output = String::new();
+    
+    // Create walker with exclusions
+    let mut override_builder = OverrideBuilder::new(dir);
+    for pattern in exclude_patterns {
+        override_builder.add(&format!("!{}", pattern))
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, 
+                format!("Invalid exclude pattern '{}': {}", pattern, e)))?;
+    }
+    
+    let override_matcher = override_builder.build()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, 
+            format!("Failed to build override matcher: {}", e)))?;
+    
+    let walker = WalkBuilder::new(dir)
+        .hidden(false)
+        .git_ignore(true)
+        .ignore(true)
+        .git_global(true)
+        .require_git(false)
+        .overrides(override_matcher)
+        .filter_entry(|e| {
+            let file_name = e.file_name();
+            let file_name_str = match file_name.to_str() {
+                Some(s) => s,
+                None => return true,
+            };
+            
+            !is_build_executable(file_name_str)
+        })
+        .build();
+    
+    writeln!(&mut output, "Directory: {}\n", dir.display()).unwrap();
+    
+    for result in walker {
+        match result {
+            Ok(entry) => {
+                if !entry.file_type().map_or(false, |ft| ft.is_file()) {
+                    continue;
+                }
+                
+                let path = entry.path();
+                let metadata = path.metadata()?;
+                let file_size = metadata.len();
+                
+                if file_size > max_file_size {
+                    writeln!(&mut output, "Skipped (too large): {}\n", path.display()).unwrap();
+                    continue;
+                }
+                
+                if total_size + file_size > max_total_size {
+                    writeln!(&mut output, "Reached total size limit of {} MB\n", max_total_size_mb).unwrap();
+                    break;
+                }
+                
+                // Try to read the file contents
+                match std::fs::read(path) {
+                    Ok(bytes) => {
+                        match String::from_utf8(bytes) {
+                            Ok(content) => {
+                                output.push_str(&format_file_content(path, &content));
+                                total_size += file_size;
+                            }
+                            Err(_) => {
+                                writeln!(&mut output, "Skipped (not UTF-8): {}\n", path.display()).unwrap();
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        writeln!(&mut output, "Error reading {}: {}\n", path.display(), e).unwrap();
+                    }
+                };
             }
-        },
-        Err(e) => {
-            eprintln!("Error validating directory: {}", e);
-            std::process::exit(1);
+            Err(err) => eprintln!("Error accessing entry: {}", err),
         }
     }
+    
+    print!("{}", output);
+    Ok(())
 }
 
 fn validate_directory(path: &Path) -> io::Result<()> {
