@@ -22,7 +22,8 @@ struct Args {
 enum Commands {
     /// List files in a format suitable for prompts, including file contents
     Prompt {
-        /// Directory path to process
+        /// Directory path to process (default: current directory)
+        #[arg(short, long, default_value = ".")]
         path: String,
 
         /// Maximum size in KB for files to include (default: 100)
@@ -35,12 +36,14 @@ enum Commands {
     },
     /// List files in the directory
     List {
-        /// Directory path to list
+        /// Directory path to list (default: current directory)
+        #[arg(short, long, default_value = ".")]
         path: String,
     },
     /// Generate README.md content using Claude and output to stdout
     Readme {
-        /// Directory path to process
+        /// Directory path to process (default: current directory)
+        #[arg(short, long, default_value = ".")]
         path: String,
 
         /// Maximum size in KB for files to include (default: 100)
