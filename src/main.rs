@@ -2,6 +2,7 @@ use std::env;
 use std::path::Path;
 use std::process;
 use std::io;
+use ignore::WalkBuilder;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -46,15 +47,19 @@ fn validate_directory(path: &Path) -> io::Result<()> {
 }
 
 fn list_files(dir: &Path) -> io::Result<()> {
-    if dir.is_dir() {
-        for entry in dir.read_dir()? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                list_files(&path)?;
-            } else {
-                println!("{}", path.display());
+    let walker = WalkBuilder::new(dir)
+        .hidden(false)  // Show hidden files
+        .git_ignore(true)  // Respect .gitignore files
+        .build();
+
+    for result in walker {
+        match result {
+            Ok(entry) => {
+                if entry.file_type().map_or(false, |ft| ft.is_file()) {
+                    println!("{}", entry.path().display());
+                }
             }
+            Err(err) => eprintln!("Error accessing entry: {}", err),
         }
     }
     Ok(())
