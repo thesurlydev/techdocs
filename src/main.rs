@@ -38,7 +38,7 @@ enum Commands {
         /// Directory path to list
         path: String,
     },
-    /// Generate a README.md file using Claude
+    /// Generate README.md content using Claude and output to stdout
     Readme {
         /// Directory path to process
         path: String,
@@ -50,10 +50,6 @@ enum Commands {
         /// Maximum total output size in MB (default: 10)
         #[arg(short, long, default_value = "10")]
         total_size: u64,
-
-        /// Output file path (default: README.md)
-        #[arg(short, long, default_value = "README.md")]
-        output: String,
     },
 }
 
@@ -75,20 +71,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             list_files(path, &exclude_patterns)?;
             Ok::<(), Box<dyn std::error::Error>>(())
         }
-        Commands::Readme { path, max_size, total_size, output } => {
+        Commands::Readme { path, max_size, total_size } => {
             let path = Path::new(path);
-            validate_directory(path)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            validate_directory(path)?;
 
             // Capture the output to a string
             let mut output_content = Vec::new();
-            list_files_prompt(path, &exclude_patterns, *max_size, *total_size, &mut output_content)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            list_files_prompt(path, &exclude_patterns, *max_size, *total_size, &mut output_content)?;
             let files_content = String::from_utf8_lossy(&output_content).into_owned();
 
             // Send to Claude
-            let client = ClaudeClient::new()
-                .map_err(|e| e)?;
+            let client = ClaudeClient::new()?;
 
             let system_prompt = "You are a technical documentation expert. Your task is to create a concise but informative README.md file in markdown format based on the codebase content provided. Include:
 1. Project name and brief description
@@ -104,10 +97,8 @@ IMPORTANT: Output ONLY the markdown content. Do not include any other text, expl
             let readme_content = client.send_message(system_prompt, &files_content)
                 .await?;
 
-            // Write to file
-            std::fs::write(output, readme_content)?;
-
-
+            // Print to stdout
+            print!("{}", readme_content);
             Ok(())
         }
     }?;
