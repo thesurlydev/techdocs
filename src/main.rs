@@ -14,7 +14,15 @@ fn main() {
     let path = Path::new(&args[1]);
     
     match validate_directory(path) {
-        Ok(_) => println!("Valid directory: {}", path.display()),
+        Ok(_) => {
+            match list_files(path) {
+                Ok(_) => (),
+                Err(e) => {
+                    eprintln!("Error listing files: {}", e);
+                    process::exit(1);
+                }
+            }
+        },
         Err(e) => {
             eprintln!("Error: {}", e);
             process::exit(1);
@@ -33,6 +41,21 @@ fn validate_directory(path: &Path) -> io::Result<()> {
     match path.read_dir() {
         Ok(_) => (),
         Err(e) => return Err(io::Error::new(io::ErrorKind::PermissionDenied, format!("directory is not readable: {}", e))),
+    }
+    Ok(())
+}
+
+fn list_files(dir: &Path) -> io::Result<()> {
+    if dir.is_dir() {
+        for entry in dir.read_dir()? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                list_files(&path)?;
+            } else {
+                println!("{}", path.display());
+            }
+        }
     }
     Ok(())
 }
