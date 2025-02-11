@@ -1,32 +1,34 @@
-use std::env;
 use std::path::Path;
-use std::process;
 use std::io;
-use ignore::WalkBuilder;
+use ignore::{WalkBuilder, overrides::OverrideBuilder};
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Directory path to list files from
+    path: String,
+
+    /// Additional patterns to exclude (in .gitignore format)
+    #[arg(short, long, value_delimiter = ',')]
+    exclude: Vec<String>,
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    if args.len() != 2 {
-        eprintln!("Error: Expected exactly one argument (a local path)\nUsage: {} <path>", args[0]);
-        process::exit(1);
-    }
-
-    let path = Path::new(&args[1]);
+    let args = Args::parse();
+    let path = Path::new(&args.path);
     
     match validate_directory(path) {
-        Ok(_) => {
-            match list_files(path) {
-                Ok(_) => (),
-                Err(e) => {
-                    eprintln!("Error listing files: {}", e);
-                    process::exit(1);
-                }
+        Ok(_) => match list_files(path, &args.exclude) {
+            Ok(_) => (),
+            Err(e) => {
+                eprintln!("Error listing files: {}", e);
+                std::process::exit(1);
             }
         },
         Err(e) => {
-            eprintln!("Error: {}", e);
-            process::exit(1);
+            eprintln!("Error validating directory: {}", e);
+            std::process::exit(1);
         }
     }
 }
@@ -62,13 +64,28 @@ fn is_build_executable(file_name: &str) -> bool {
     BUILD_EXECUTABLES.contains(&file_name)
 }
 
-fn list_files(dir: &Path) -> io::Result<()> {
+fn list_files(dir: &Path, exclude_patterns: &[String]) -> io::Result<()> {
+    // Create an override builder for additional exclude patterns
+    let mut override_builder = OverrideBuilder::new(dir);
+    
+    // Add each exclude pattern
+    for pattern in exclude_patterns {
+        override_builder.add(&format!("!{}", pattern))
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, 
+                format!("Invalid exclude pattern '{}': {}", pattern, e)))?;
+    }
+    
+    // Build the override matcher
+    let override_matcher = override_builder.build()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, 
+            format!("Failed to build override matcher: {}", e)))?;
     let walker = WalkBuilder::new(dir)
         .hidden(false)     // Show hidden files
         .git_ignore(true)  // Respect .gitignore files
         .ignore(true)      // Use standard ignore patterns
         .git_global(true)  // Use global gitignore
         .require_git(false) // Don't require git repo
+        .overrides(override_matcher) // Add our custom exclude patterns
         .filter_entry(|e| {
             let file_name = e.file_name();
             let file_name_str = match file_name.to_str() {
