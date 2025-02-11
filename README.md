@@ -1,77 +1,39 @@
-# sbfly - Spring Boot on Fly.io
+# TechDocs
 
-A modern Spring Boot application template designed for deployment on Fly.io, featuring OAuth2 authentication with Google and session management using PostgreSQL.
+A Rust-based CLI tool for generating technical documentation from codebases, with support for AI-powered README generation.
 
 ## Key Features
 
-- OAuth2 authentication with Google
-- Session management with JDBC
-- JTE templating engine
-- DaisyUI + Tailwind CSS for styling
-- Dark/Light theme support
-- Docker multi-stage build
-- Virtual threads enabled
-- Fly.io deployment ready
-
-## Prerequisites
-
-- Java 23
-- Maven
-- PostgreSQL
-- Google OAuth2 credentials
-- Fly.io account
+- Recursive directory traversal with `.gitignore` support
+- Smart file filtering and size limits
+- UTF-8 file content validation
+- AI-powered README generation using Claude API
+- Customizable exclude patterns
+- Language-aware code formatting
 
 ## Installation
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/thesurlydev/sbfly.git
+# Clone the repository
+git clone https://github.com/thesurlydev/techdocs.git
+
+# Build the project
+cargo build --release
+
+# Add to path (optional)
+cp target/release/techdocs /usr/local/bin/
 ```
 
-2. Configure environment variables:
-```properties
-GOOGLE_CLIENT_ID=your_client_id
-GOOGLE_CLIENT_SECRET=your_client_secret
-DB_URL=jdbc:postgresql://localhost:5432/your_db
-DB_USERNAME=your_username
-DB_PASSWORD=your_password
-```
+Requires:
+- Rust toolchain
+- `ANTHROPIC_API_KEY` environment variable for Claude integration
 
 ## Usage
 
-Build and run locally:
 ```bash
-./mvnw clean package
-java -jar target/sbfly-0.0.1-SNAPSHOT.jar
-```
+# Generate formatted content for AI prompts
+techdocs prompt -p /path/to/project --max-size 100 --total-size 10
 
-Using Just:
-```bash
-# Build project
-just build
-
-# Build and run Docker image
-just run
-
-# Deploy to Fly.io
-just deploy
-```
-
-## Project Structure
-
-```
-src/
-├── main/
-│   ├── java/
-│   │   └── dev/surly/sbfly/
-│   │       ├── security/       # Security configuration
-│   │       ├── user/          # User management
-│   │       └── controllers/   # Web controllers
-│   ├── jte/                  # JTE templates
-│   │   ├── components/      # Reusable UI components
-│   │   ├── layout/         # Page layouts
-│   │   └── pages/         # Page templates
-│   └── resources/
-│       ├── application.properties
-│       └── schema.sql
+# Generate README using Claude AI
+techdocs readme -p /path/to/project
 ```
