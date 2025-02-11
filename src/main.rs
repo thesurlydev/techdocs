@@ -48,8 +48,18 @@ fn validate_directory(path: &Path) -> io::Result<()> {
 
 fn list_files(dir: &Path) -> io::Result<()> {
     let walker = WalkBuilder::new(dir)
-        .hidden(false)  // Show hidden files
+        .hidden(false)     // Show hidden files
         .git_ignore(true)  // Respect .gitignore files
+        .ignore(true)      // Use standard ignore patterns
+        .git_global(true)  // Use global gitignore
+        .require_git(false) // Don't require git repo
+        .filter_entry(|e| {
+            // Skip .git, .svn, and .hg directories
+            !e.file_name()
+                .to_str()
+                .map(|s| s == ".git" || s == ".svn" || s == ".hg")
+                .unwrap_or(false)
+        })
         .build();
 
     for result in walker {
