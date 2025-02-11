@@ -5,7 +5,6 @@ use clap::{Parser, Subcommand};
 use std::fmt::Write as FmtWrite;
 
 mod claude;
-use claude::ClaudeClient;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -38,27 +37,6 @@ enum Commands {
         /// Directory path to list
         path: String,
     },
-    /// Send files to Claude for analysis
-    Claude {
-        /// Directory path to analyze
-        path: String,
-
-        /// Maximum size in KB for files to include (default: 100)
-        #[arg(short, long, default_value = "100")]
-        max_size: u64,
-
-        /// Maximum total output size in MB (default: 10)
-        #[arg(short, long, default_value = "10")]
-        total_size: u64,
-
-        /// System prompt to send to Claude
-        #[arg(short, long)]
-        system_prompt: Option<String>,
-
-        /// User message to send to Claude
-        #[arg(short, long)]
-        message: String,
-    },
 }
 
 #[tokio::main]
@@ -78,34 +56,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             validate_directory(path)
                 .and_then(|_| list_files(path, &exclude_patterns))
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
-        }
-        Commands::Claude { path, max_size, total_size, system_prompt, message } => {
-            // First get the file listing in prompt format
-            let path = Path::new(path);
-            validate_directory(path)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-            
-            // Get the file listing
-            let output = Vec::new();
-            list_files_prompt(path, &exclude_patterns, *max_size, *total_size)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-            let files_content = String::from_utf8_lossy(&output).into_owned();
-            
-            // Now send the content to Claude
-            let client = ClaudeClient::new()
-                .map_err(|e| e)?;
-            
-            let system_prompt = system_prompt.as_deref().unwrap_or(
-                "You are an AI assistant analyzing a codebase. Review the files and respond to the user's message.");
-            
-            client.send_message(system_prompt, &format!("{}
-
-{}", files_content, message))
-                .await
-                .map(|response| {
-                    println!("Claude's response:\n{}", response);
-                })
-                .map_err(|e| e)
         }
     }?;
     
