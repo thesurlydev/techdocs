@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use std::fmt::Write as FmtWrite;
 
 mod claude;
+use claude::ClaudeClient;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -37,6 +38,23 @@ enum Commands {
         /// Directory path to list
         path: String,
     },
+    /// Generate a README.md file using Claude
+    Readme {
+        /// Directory path to process
+        path: String,
+
+        /// Maximum size in KB for files to include (default: 100)
+        #[arg(short, long, default_value = "100")]
+        max_size: u64,
+
+        /// Maximum total output size in MB (default: 10)
+        #[arg(short, long, default_value = "10")]
+        total_size: u64,
+
+        /// Output file path (default: README.md)
+        #[arg(short, long, default_value = "README.md")]
+        output: String,
+    },
 }
 
 #[tokio::main]
@@ -47,15 +65,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &args.command {
         Commands::Prompt { path, max_size, total_size } => {
             let path = Path::new(path);
-            validate_directory(path)
-                .and_then(|_| list_files_prompt(path, &exclude_patterns, *max_size, *total_size))
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+            validate_directory(path)?;
+            list_files_prompt(path, &exclude_patterns, *max_size, *total_size, std::io::stdout())?;
+            Ok::<(), Box<dyn std::error::Error>>(())
         }
         Commands::List { path } => {
             let path = Path::new(path);
+            validate_directory(path)?;
+            list_files(path, &exclude_patterns)?;
+            Ok::<(), Box<dyn std::error::Error>>(())
+        }
+        Commands::Readme { path, max_size, total_size, output } => {
+            let path = Path::new(path);
             validate_directory(path)
-                .and_then(|_| list_files(path, &exclude_patterns))
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+            // Capture the output to a string
+            let mut output_content = Vec::new();
+            list_files_prompt(path, &exclude_patterns, *max_size, *total_size, &mut output_content)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            let files_content = String::from_utf8_lossy(&output_content).into_owned();
+
+            // Send to Claude
+            let client = ClaudeClient::new()
+                .map_err(|e| e)?;
+
+            let system_prompt = "You are a technical documentation expert. Your task is to create a concise but informative README.md file in markdown format based on the codebase content provided. Include:
+1. Project name and brief description
+2. Key features
+3. Installation instructions if relevant
+4. Basic usage examples
+5. Project structure overview
+Be concise and focus on the most important aspects. Use proper markdown formatting.";
+
+            let readme_content = client.send_message(system_prompt, &files_content)
+                .await?;
+
+            // Write to file
+            std::fs::write(output, readme_content)?;
+
+            println!("Generated README.md at: {}", output);
+            Ok(())
         }
     }?;
     
@@ -80,12 +130,10 @@ fn format_file_content(path: &Path, content: &str) -> String {
 }
 
 /// List files in a format suitable for prompts
-fn list_files_prompt(dir: &Path, exclude_patterns: &[String], max_file_size_kb: u64, max_total_size_mb: u64) -> io::Result<()> {
+fn list_files_prompt<W: std::io::Write>(dir: &Path, exclude_patterns: &[String], max_file_size_kb: u64, max_total_size_mb: u64, mut writer: W) -> io::Result<()> {
     let max_file_size = max_file_size_kb * 1024;
     let max_total_size = max_total_size_mb * 1024 * 1024;
     let mut total_size = 0;
-    let mut output = String::new();
-    
     // Create walker with exclusions
     let mut override_builder = OverrideBuilder::new(dir);
     for pattern in exclude_patterns {
@@ -116,7 +164,7 @@ fn list_files_prompt(dir: &Path, exclude_patterns: &[String], max_file_size_kb: 
         })
         .build();
     
-    writeln!(&mut output, "Directory: {}\n", dir.display()).unwrap();
+    writeln!(writer, "Directory: {}\n", dir.display())?;
     
     for result in walker {
         match result {
@@ -130,12 +178,12 @@ fn list_files_prompt(dir: &Path, exclude_patterns: &[String], max_file_size_kb: 
                 let file_size = metadata.len();
                 
                 if file_size > max_file_size {
-                    writeln!(&mut output, "Skipped (too large): {}\n", path.display()).unwrap();
+                    writeln!(writer, "Skipped (too large): {}\n", path.display())?;
                     continue;
                 }
                 
                 if total_size + file_size > max_total_size {
-                    writeln!(&mut output, "Reached total size limit of {} MB\n", max_total_size_mb).unwrap();
+                    writeln!(writer, "Reached total size limit of {} MB\n", max_total_size_mb)?;
                     break;
                 }
                 
@@ -144,16 +192,16 @@ fn list_files_prompt(dir: &Path, exclude_patterns: &[String], max_file_size_kb: 
                     Ok(bytes) => {
                         match String::from_utf8(bytes) {
                             Ok(content) => {
-                                output.push_str(&format_file_content(path, &content));
+                                write!(writer, "{}", format_file_content(path, &content))?;
                                 total_size += file_size;
                             }
                             Err(_) => {
-                                writeln!(&mut output, "Skipped (not UTF-8): {}\n", path.display()).unwrap();
+                                writeln!(writer, "Skipped (not UTF-8): {}\n", path.display())?;
                             }
                         }
                     }
                     Err(e) => {
-                        writeln!(&mut output, "Error reading {}: {}\n", path.display(), e).unwrap();
+                        writeln!(writer, "Error reading {}: {}\n", path.display(), e)?;
                     }
                 };
             }
@@ -161,7 +209,7 @@ fn list_files_prompt(dir: &Path, exclude_patterns: &[String], max_file_size_kb: 
         }
     }
     
-    print!("{}", output);
+
     Ok(())
 }
 
