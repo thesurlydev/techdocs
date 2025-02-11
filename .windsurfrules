@@ -1,0 +1,5 @@
+1. This is a Rust CLI project.
+2. Cargo is used to build, test and package the project.
+3. After each change you make, verify the project compiles by running `cargo check`.
+4. After each change is approved, add a commit using conventional commits.
+ 
