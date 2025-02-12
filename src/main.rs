@@ -1,11 +1,37 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::io;
 use ignore::{WalkBuilder, overrides::OverrideBuilder};
 use clap::{Parser, Subcommand};
 use std::fmt::Write as FmtWrite;
+use url::Url;
+use git2::Repository;
+use temp_dir::TempDir;
+use std::error::Error;
 
 mod claude;
 use claude::ClaudeClient;
+
+/// Resolve a path or GitHub URL to a local directory path
+async fn resolve_path(path_or_url: &str) -> Result<(PathBuf, Option<TempDir>), Box<dyn Error>> {
+    // Check if the input is a URL
+    if let Ok(url) = Url::parse(path_or_url) {
+        if url.scheme() == "https" && url.host_str() == Some("github.com") {
+            // Create a temporary directory
+            let temp_dir = TempDir::new()?;
+            let temp_path = temp_dir.path().to_path_buf();
+
+            // Clone the repository
+            Repository::clone(path_or_url, &temp_path)?;
+
+            Ok((temp_path, Some(temp_dir)))
+        } else {
+            Err("Only GitHub URLs are supported".into())
+        }
+    } else {
+        // It's a local path
+        Ok((PathBuf::from(path_or_url), None))
+    }
+}
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -63,24 +89,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     match &args.command {
         Commands::Prompt { path, max_size, total_size } => {
-            let path = Path::new(path);
-            validate_directory(path)?;
-            list_files_prompt(path, &exclude_patterns, *max_size, *total_size, std::io::stdout())?;
+            let (resolved_path, _temp_dir) = resolve_path(path).await?;
+            validate_directory(&resolved_path)?;
+            list_files_prompt(&resolved_path, &exclude_patterns, *max_size, *total_size, std::io::stdout())?;
             Ok::<(), Box<dyn std::error::Error>>(())
         }
         Commands::List { path } => {
-            let path = Path::new(path);
-            validate_directory(path)?;
-            list_files(path, &exclude_patterns)?;
+            let (resolved_path, _temp_dir) = resolve_path(path).await?;
+            validate_directory(&resolved_path)?;
+            list_files(&resolved_path, &exclude_patterns)?;
             Ok::<(), Box<dyn std::error::Error>>(())
         }
         Commands::Readme { path, max_size, total_size } => {
-            let path = Path::new(path);
-            validate_directory(path)?;
+            let (resolved_path, _temp_dir) = resolve_path(path).await?;
+            validate_directory(&resolved_path)?;
 
             // Capture the output to a string
             let mut output_content = Vec::new();
-            list_files_prompt(path, &exclude_patterns, *max_size, *total_size, &mut output_content)?;
+            list_files_prompt(&resolved_path, &exclude_patterns, *max_size, *total_size, &mut output_content)?;
             let files_content = String::from_utf8_lossy(&output_content).into_owned();
 
             // Send to Claude
