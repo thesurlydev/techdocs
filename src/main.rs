@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::io;
+use std::io::{self, Read};
 use ignore::{WalkBuilder, overrides::OverrideBuilder};
 use clap::{Parser, Subcommand};
 use std::fmt::Write as FmtWrite;
@@ -7,6 +7,7 @@ use url::Url;
 use git2::Repository;
 use temp_dir::TempDir;
 use std::error::Error;
+use std::fs;
 
 mod claude;
 use claude::ClaudeClient;
@@ -112,18 +113,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Send to Claude
             let client = ClaudeClient::new()?;
 
-            let system_prompt = "You are a technical documentation expert. Your task is to create a concise but informative README.md file in markdown format based on the codebase content provided. Include:
-1. Project name and brief description
-2. Key features
-3. Installation instructions if relevant
-4. Basic usage examples
-5. Project structure overview
+            // Read the system prompt from file
+            let mut system_prompt = String::new();
+            fs::File::open("prompts/readme.txt")?
+                .read_to_string(&mut system_prompt)?;
 
-Be concise and focus on the most important aspects. Use proper markdown formatting.
-
-IMPORTANT: Output ONLY the markdown content. Do not include any other text, explanations, or metadata.";
-
-            let readme_content = client.send_message(system_prompt, &files_content)
+            let readme_content = client.send_message(&system_prompt, &files_content)
                 .await?;
 
             // Print to stdout
