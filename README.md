@@ -10,6 +10,7 @@ A Rust-based CLI tool for generating technical documentation from codebases, wit
 - AI-powered README generation using Claude API
 - Customizable exclude patterns
 - Language-aware code formatting
+- Support for GitHub URLs as input (automatically clones repositories)
 
 ## Installation
 
@@ -36,4 +37,13 @@ techdocs prompt -p /path/to/project --max-size 100 --total-size 10
 
 # Generate README using Claude AI
 techdocs readme -p /path/to/project
+
+# Use with GitHub repositories
+techdocs prompt -p https://github.com/username/repo --max-size 100 --total-size 10
+techdocs readme -p https://github.com/username/repo
 ```
+
+When using GitHub URLs, the tool will automatically:
+1. Clone the repository to a temporary directory
+2. Process the files as requested
+3. Clean up the temporary directory when done
