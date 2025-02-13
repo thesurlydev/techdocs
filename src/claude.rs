@@ -43,6 +43,14 @@ impl ClaudeClient {
         })
     }
 
+    pub async fn generate_readme(
+        &self,
+        system_prompt: &str,
+        file_list: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        self.send_message(system_prompt, file_list).await
+    }
+
     pub async fn send_message(
         &self,
         system_prompt: &str,
