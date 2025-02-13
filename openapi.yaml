@@ -6,7 +6,7 @@ info:
     Supports both local directories and GitHub repositories as input.
   version: 0.1.0
   contact:
-    name: Shane Shown
+    name: Shane Witbeck
     url: https://github.com/thesurlydev/techdocs
 
 servers:
