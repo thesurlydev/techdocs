@@ -1,0 +1,108 @@
+openapi: 3.0.3
+info:
+  title: TechDocs API
+  description: |
+    API for generating technical documentation from codebases using AI.
+    Supports both local directories and GitHub repositories as input.
+  version: 0.1.0
+  contact:
+    name: Shane Shown
+    url: https://github.com/thesurlydev/techdocs
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns 200 OK if the service is healthy
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /generate:
+    post:
+      summary: Generate README for a codebase
+      description: |
+        Generates a README file for a given codebase using AI.
+        The codebase can be either a local directory or a GitHub repository URL.
+      operationId: generateReadme
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateReadmeRequest'
+      responses:
+        '200':
+          description: README generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateReadmeResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    GenerateReadmeRequest:
+      type: object
+      required:
+        - path_or_url
+      properties:
+        path_or_url:
+          type: string
+          description: |
+            Path to local directory or GitHub repository URL.
+            Examples:
+              - /path/to/project
+              - https://github.com/username/repo
+        exclude_patterns:
+          type: array
+          items:
+            type: string
+          description: |
+            List of patterns to exclude (in .gitignore format).
+            Default patterns include common build directories and dependencies.
+          example: ["target", "node_modules", "*.log"]
+
+    GenerateReadmeResponse:
+      type: object
+      required:
+        - readme
+      properties:
+        readme:
+          type: string
+          description: Generated README content in Markdown format
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message describing what went wrong
+
+tags:
+  - name: Documentation
+    description: Endpoints for generating technical documentation
+
+security: []  # No security requirements as this is meant to run locally

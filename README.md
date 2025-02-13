@@ -53,6 +53,8 @@ techdocs-cli -e "target/,node_modules/" readme path/to/project
 
 ### HTTP API
 
+The HTTP API is documented using OpenAPI 3.0 specification in `openapi.yaml`. You can view the API documentation using tools like [Swagger UI](https://swagger.io/tools/swagger-ui/) or [Redoc](https://redoc.ly/).
+
 ```bash
 # Start the API server
 cargo run --bin techdocs-api
