@@ -34,7 +34,7 @@ pub struct ClaudeClient {
 }
 
 impl ClaudeClient {
-    #[instrument(skip(api_key), err)]
+    #[instrument(err)]
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let api_key = match env::var("ANTHROPIC_API_KEY") {
             Ok(key) => {
@@ -98,7 +98,7 @@ impl ClaudeClient {
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         
         match HeaderValue::from_str(&self.api_key) {
-            Ok(value) => headers.insert("x-api-key", value),
+            Ok(value) => headers.insert("anthropic-api-key", value),
             Err(e) => {
                 error!(?e, "Failed to create API key header");
                 return Err(e.into());
