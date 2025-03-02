@@ -7,18 +7,16 @@ use axum::{self,
     extract::State,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use techdocs::{
-    claude::ClaudeClient,
-    list_files_prompt, resolve_path,
+    list_files_prompt, resolve_path, generate_readme,
     Result as TechDocsResult,
 };
 
 #[derive(Clone)]
 struct AppState {
-    claude_client: Arc<ClaudeClient>,
     readme_prompt: String,
 }
 
@@ -42,7 +40,7 @@ async fn health_check() -> StatusCode {
     StatusCode::OK
 }
 
-async fn generate_readme(
+async fn generate_readme_handler(
     State(state): State<AppState>,
     Json(request): Json<GenerateReadmeRequest>,
 ) -> Result<Json<GenerateReadmeResponse>, (StatusCode, Json<ErrorResponse>)> {
@@ -79,9 +77,7 @@ async fn generate_readme(
     })?;
 
     // Generate README using Claude
-    let readme = state
-        .claude_client
-        .generate_readme(&state.readme_prompt, &String::from_utf8_lossy(&file_list))
+    let readme = generate_readme(&state.readme_prompt, &String::from_utf8_lossy(&file_list))
         .await
         .map_err(|e| {
             (
@@ -106,8 +102,7 @@ async fn main() -> TechDocsResult<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Initialize Claude client
-    let claude_client = Arc::new(ClaudeClient::new()?);
+    // No need to initialize Claude client anymore
 
     // Load README prompt
     let mut readme_prompt = String::new();
@@ -116,14 +111,13 @@ async fn main() -> TechDocsResult<()> {
 
     // Create app state
     let state = AppState {
-        claude_client,
         readme_prompt,
     };
 
     // Build router
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/generate", post(generate_readme))
+        .route("/generate", post(generate_readme_handler))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
 

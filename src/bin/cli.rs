@@ -1,8 +1,8 @@
 use std::io::Read;
 use clap::{Parser, Subcommand};
+// use claude_client::claude::ClaudeClient; // Not needed anymore
 use techdocs::{
-    claude::ClaudeClient,
-    list_files, list_files_prompt, resolve_path, validate_directory,
+    list_files, list_files_prompt, resolve_path, validate_directory, generate_readme,
     Result as TechDocsResult,
 };
 
@@ -85,9 +85,7 @@ async fn main() -> TechDocsResult<()> {
             list_files_prompt(&path, &exclude_patterns, 100, 10, &mut file_list)?;
 
             // Generate README using Claude
-            let client = ClaudeClient::new()?;
-            let readme = client
-                .generate_readme(&system_prompt, &String::from_utf8_lossy(&file_list))
+            let readme = generate_readme(&system_prompt, &String::from_utf8_lossy(&file_list))
                 .await?;
 
             println!("{}", readme);

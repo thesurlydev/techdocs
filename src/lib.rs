@@ -6,8 +6,8 @@ use git2::Repository;
 use temp_dir::TempDir;
 use std::fs;
 use std::error::Error as StdError;
+use claude_client::claude::ClaudeClient;
 
-pub mod claude;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TechDocsError {
@@ -21,6 +21,8 @@ pub enum TechDocsError {
     Url(String),
     #[error("Ignore error: {0}")]
     Ignore(#[from] ignore::Error),
+    #[error("Claude client error: {0}")]
+    ClaudeClient(String),
     #[error("{0}")]
     Other(#[from] Box<dyn StdError>),
 }
@@ -175,4 +177,30 @@ pub fn list_files(dir: &Path, exclude_patterns: &[String]) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Generate a README.md file using Claude AI based on the codebase content
+/// 
+/// # Arguments
+/// * `system_prompt` - The system prompt to use for Claude
+/// * `files_content` - The content of the files to analyze
+/// 
+/// # Returns
+/// A string containing the generated README.md content
+pub async fn generate_readme(system_prompt: &str, files_content: &str) -> Result<String> {
+    // Initialize Claude client
+    let client = ClaudeClient::new()
+        .map_err(|e| TechDocsError::ClaudeClient(e.to_string()))?;
+    
+    // Send request to Claude
+    let readme_content = client
+        .send_message(
+            None, // Use default model
+            system_prompt,
+            files_content
+        )
+        .await
+        .map_err(|e| TechDocsError::ClaudeClient(e.to_string()))?;
+    
+    Ok(readme_content)
 }
