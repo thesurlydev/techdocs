@@ -9,6 +9,7 @@ use axum::{self,
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
+use tracing::{info, error, debug, instrument};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use techdocs::{
     claude::ClaudeClient,
@@ -38,20 +39,26 @@ struct ErrorResponse {
     error: String,
 }
 
+#[instrument]
 async fn health_check() -> StatusCode {
+    info!("Health check request received");
     StatusCode::OK
 }
 
+#[instrument(skip(state), fields(path_or_url = %request.path_or_url))]
 async fn generate_readme(
     State(state): State<AppState>,
     Json(request): Json<GenerateReadmeRequest>,
 ) -> Result<Json<GenerateReadmeResponse>, (StatusCode, Json<ErrorResponse>)> {
     let exclude_patterns = request.exclude_patterns.unwrap_or_default();
+    debug!(?exclude_patterns, "Processing with exclude patterns");
 
     // Resolve path (local or GitHub URL)
+    info!("Resolving path: {}", request.path_or_url);
     let (path, _temp_dir) = resolve_path(&request.path_or_url)
         .await
         .map_err(|e| {
+            error!(error = %e, "Failed to resolve path");
             (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
@@ -59,8 +66,10 @@ async fn generate_readme(
                 }),
             )
         })?;
+    debug!(path = %path.display(), "Path resolved successfully");
 
     // Generate file list with prompt
+    info!("Generating file list");
     let mut file_list = Vec::new();
     list_files_prompt(
         &path,
@@ -70,6 +79,7 @@ async fn generate_readme(
         &mut file_list,
     )
     .map_err(|e| {
+        error!(error = %e, "Failed to generate file list");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -77,13 +87,16 @@ async fn generate_readme(
             }),
         )
     })?;
+    debug!(file_list_size = file_list.len(), "File list generated");
 
     // Generate README using Claude
+    info!("Generating README with Claude");
     let readme = state
         .claude_client
         .generate_readme(&state.readme_prompt, &String::from_utf8_lossy(&file_list))
         .await
         .map_err(|e| {
+            error!(error = %e, "Claude failed to generate README");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -91,6 +104,7 @@ async fn generate_readme(
                 }),
             )
         })?;
+    info!("README generated successfully");
 
     Ok(Json(GenerateReadmeResponse { readme }))
 }
@@ -106,13 +120,18 @@ async fn main() -> TechDocsResult<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    info!("Starting TechDocs API service");
+
     // Initialize Claude client
+    debug!("Initializing Claude client");
     let claude_client = Arc::new(ClaudeClient::new()?);
 
     // Load README prompt
+    debug!("Loading README prompt");
     let mut readme_prompt = String::new();
     std::fs::File::open("prompts/readme.txt")?
         .read_to_string(&mut readme_prompt)?;
+    debug!(prompt_length = readme_prompt.len(), "README prompt loaded");
 
     // Create app state
     let state = AppState {
@@ -121,6 +140,7 @@ async fn main() -> TechDocsResult<()> {
     };
 
     // Build router
+    info!("Configuring API routes");
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/generate", post(generate_readme))
@@ -129,10 +149,12 @@ async fn main() -> TechDocsResult<()> {
 
     // Start server
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("Listening on {}", addr);
+    info!(address = %addr, "Starting server");
     
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    info!("Server started, listening for connections");
     axum::serve(listener, app).await?;
 
+    info!("Server shutdown");
     Ok(())
 }
