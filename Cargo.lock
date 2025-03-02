@@ -249,6 +249,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
+name = "claude-client"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbe8259b2ff76901d99e674c85c9f4c2c07ff7d43dfdc1790d402d9127713051"
+dependencies = [
+ "once_cell",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1512,10 +1525,10 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
+ "claude-client",
  "dotenv",
  "git2",
  "ignore",
- "reqwest",
  "serde",
  "temp-dir",
  "tempfile",

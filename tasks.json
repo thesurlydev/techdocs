@@ -1,0 +1,16 @@
+{
+  "tasks": [
+    {
+      "id": "update-dependencies",
+      "description": "Update all dependencies to latest versions",
+      "files": ["Cargo.toml", "*/Cargo.toml"],
+      "ai_prompt": "Update all dependencies to their latest compatible versions"
+    },
+    {
+      "id": "add-logging",
+      "description": "Add structured logging",
+      "files": ["src/**/*.rs"],
+      "ai_prompt": "Refactor to add structured logging with tracing crate"
+    }
+  ]
+}
