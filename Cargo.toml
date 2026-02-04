@@ -22,7 +22,7 @@ claude-client = "0.3.1"
 tokio = { version = "1.43", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 dotenv = "0.15"
-git2 = "0.20.0"
+git2 = "0.20.4"
 url = "2.5"
 temp-dir = "0.1"
 axum = "0.8.1"
